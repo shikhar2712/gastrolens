@@ -1,0 +1,20 @@
+# Tested together in a clean virtual environment (Python 3.12, CPU). Choose Python 3.12 in the Streamlit Community Cloud advanced settings.
+# torch is the plain PyPI package on purpose (it installs with pip and uv alike); on a host where the large CUDA wheel is a problem, replace the
+# next line with `torch==2.6.0+cpu` and add `--extra-index-url https://download.pytorch.org/whl/cpu` above it (works with pip).
+torch==2.6.0
+torchvision==0.21.0
+transformers==5.17.0
+tokenizers
+huggingface_hub
+safetensors
+numpy
+pandas
+scipy
+pillow
+pyyaml
+reportlab==5.0.1
+matplotlib
+sacrebleu
+rouge-score
+nltk
+streamlit
