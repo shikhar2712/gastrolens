@@ -40,9 +40,51 @@ st.warning("For research use only. Not a medical device: not for diagnosis or cl
            "Do not upload images of real patients: uploads are processed on this server.")
 
 
-@st.cache_resource(show_spinner="Loading the model (the first start downloads about 1 GB)...")
+class Warmup:
+    """Loads the model on a background thread, so it is usually ready by the time a visitor has picked an image.
+    The thread never touches Streamlit; `get()` waits for it and raises the load error, and a failed load is retried on the next call."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._start()
+
+    def _start(self):
+        self.model, self.error = None, None
+        self.done = threading.Event()
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self):
+        try:
+            self.model = core.load_predictor(device="cpu", threads=int(os.environ.get("GASTROLENS_THREADS", "2")))
+        except Exception as e:  # reported to the visitor by get()
+            self.error = e
+        finally:
+            self.done.set()
+
+    @property
+    def ready(self):
+        return self.done.is_set() and self.error is None
+
+    def get(self):
+        self.done.wait()
+        with self._lock:
+            if self.error is not None:
+                err = self.error
+                self._start()  # let the next click try again (a fixed token, a network blip)
+                raise err
+            return self.model
+
+
+@st.cache_resource
+def warmup():
+    return Warmup()
+
+
 def predictor():
-    return core.load_predictor(device="cpu", threads=int(os.environ.get("GASTROLENS_THREADS", "2")))
+    return warmup().get()
+
+
+warmup()  # start loading as soon as the first visitor opens the page
 
 
 @st.cache_resource
@@ -100,6 +142,8 @@ if upload is None and sample is None:
                 if st.button(f"Sample {i}", key=f"sample{i}"):
                     st.session_state.sample = path.name
                     st.rerun()
+        if not warmup().ready:
+            st.caption("The model is loading in the background (about a minute after the app has been idle), so your first analysis starts sooner.")
         st.caption("Samples are from the Kvasir-VQA-x1 dataset (CC BY-NC 4.0, Simula Research Laboratory), which this model was trained on, "
                    "so they are easier than new images. Upload your own to see how it behaves on unfamiliar ones.")
     else:
@@ -127,10 +171,10 @@ if st.session_state.get("result") is None:
     with left:
         fit(st.image, original, caption="Your image")
     if fit(st.button, "Analyze image", type="primary"):
-        pr = predictor()
         path = None
         try:
-            with st.spinner("Reading the image (if someone else is being analysed, this waits for their turn)..."):
+            with st.spinner("Loading the model if it is not ready yet, then reading the image (this waits if someone else is being analysed)..."):
+                pr = predictor()
                 path, _ = core.read_image(raw)
                 with analysis_lock():
                     t0 = time.perf_counter()
@@ -139,6 +183,8 @@ if st.session_state.get("result") is None:
                     result["seconds"] = time.perf_counter() - t0
             st.session_state.result = result
         except core.ImageError as e:
+            st.error(str(e))
+        except RuntimeError as e:  # raised by core with a message written for the visitor (weights unavailable, checksum mismatch)
             st.error(str(e))
         except Exception:
             st.error("The model hit an error on that image. Try another image.")
