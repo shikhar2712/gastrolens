@@ -8,7 +8,7 @@ on:
 
 jobs:
   visit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Open the app, wake it if needed, let the model load
@@ -30,7 +30,8 @@ jobs:
               if wake.count():
                   print("app was asleep: waking it")
                   wake.click()
-              page.wait_for_selector("text=GastroLens", timeout=240_000)  # the title only appears once the app is running
+              # Community Cloud draws the app inside an iframe, so the title is looked for there; it only appears once the app is running
+              page.frame_locator('iframe[title="streamlitApp"]').get_by_text("GastroLens", exact=True).first.wait_for(timeout=240_000)
               page.wait_for_timeout(90_000)  # a visit that stays open lets the background model load finish
               print("app is up")
           PY
