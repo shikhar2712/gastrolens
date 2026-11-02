@@ -36,8 +36,7 @@ st.markdown(
 
 st.title("GastroLens")
 st.write("Upload a GI endoscopy image. See what the model finds, and exactly where it looked.")
-st.warning("For research use only. Not a medical device: not for diagnosis or clinical decisions. "
-           "Do not upload images of real patients: uploads are processed on this server.")
+st.warning("**Research prototype, not a medical device.** Not for diagnosis or clinical decisions.")
 
 
 class Warmup:
