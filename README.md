@@ -41,4 +41,5 @@ The app runs on CPU (2 threads; about 8 seconds per image) and needs roughly 2 G
 ## Licence and data
 
 The model was trained on a CC BY-NC 4.0 dataset, so the weights and this demo are for **non-commercial research use only**. See `NOTICE.md`.
-No dataset images are included. Uploaded images are processed in memory and a temporary file that is deleted straight after.
+`samples/` holds 7 images taken from Kvasir-VQA-x1 (CC BY-NC 4.0, Simula Research Laboratory; the images originate in earlier Kvasir datasets), shared here with attribution for non-commercial use. They are images the model was trained on. No other dataset images are included.
+Uploaded images are processed in memory and a temporary file that is deleted straight after.

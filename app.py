@@ -3,9 +3,10 @@ import io
 import os
 import threading
 import time
+from pathlib import Path
 
 import streamlit as st
-from PIL import Image
+from PIL import Image, ImageOps
 
 import core
 from webapp.report import display_value
@@ -65,13 +66,44 @@ def pct(v):
     return "99%+" if v >= 99 else f"{v}%"
 
 
-upload = st.file_uploader("Choose an endoscopy image (JPG or PNG)", type=["jpg", "jpeg", "png"])
-if upload is None:
-    st.info("Choose an image to begin.")
+SAMPLES = sorted(Path(__file__).parent.glob("samples/sample*.jpg"))
+
+
+@st.cache_data
+def thumbnail(path, side=150):
+    """A centred square crop, so every sample tile is the same size and the buttons line up."""
+    with Image.open(path) as im:
+        return ImageOps.fit(im.convert("RGB"), (side, side))
+
+
+def fresh_start():
+    """Forget the result and the chosen sample, and empty the uploader (a new widget key gives it a clean state)."""
+    st.session_state.update(result=None, sample=None, up=st.session_state.get("up", 0) + 1)
+
+
+upload = st.file_uploader("Choose an endoscopy image (JPG or PNG)", type=["jpg", "jpeg", "png"], key=f"upload{st.session_state.get('up', 0)}")
+sample = st.session_state.get("sample")
+if upload is None and sample is None:
+    if SAMPLES:
+        st.markdown("**Or try a sample image**")
+        cols = st.columns(len(SAMPLES))
+        for i, (col, path) in enumerate(zip(cols, SAMPLES), 1):
+            with col:
+                st.image(thumbnail(str(path)), width=150)
+                if st.button(f"Sample {i}", key=f"sample{i}"):
+                    st.session_state.sample = path.name
+                    st.rerun()
+        st.caption("Samples are from the Kvasir-VQA-x1 dataset (CC BY-NC 4.0, Simula Research Laboratory), which this model was trained on, "
+                   "so they are easier than new images. Upload your own to see how it behaves on unfamiliar ones.")
+    else:
+        st.info("Choose an image to begin.")
     st.stop()
 
-raw = upload.getvalue()
-key = (upload.name, len(raw))
+if upload is not None:
+    raw, name = upload.getvalue(), upload.name
+else:
+    raw, name = (Path(__file__).parent / "samples" / sample).read_bytes(), sample
+key = (name, len(raw))
 if st.session_state.get("key") != key:  # a new file: forget the last result
     st.session_state.update(key=key, result=None, error=None)
 
@@ -108,6 +140,9 @@ if st.session_state.get("result") is None:
                 os.unlink(path)
         if st.session_state.get("result") is not None:
             st.rerun()
+    if upload is None and st.button("Choose a different image"):
+        fresh_start()
+        st.rerun()
     st.stop()
 
 res = st.session_state.result
@@ -157,7 +192,7 @@ with st.expander(f"Image facts ({len(filled)} of {len(res['facts'])} checks have
 fit(st.download_button, "Download report (PDF)", data=res["pdf"], file_name="GastroLens-report.pdf", mime="application/pdf")
 st.caption(f"Analysis took {res['seconds']:.1f} s on this server's CPU.")
 if st.button("Analyze another image"):
-    st.session_state.result = None
+    fresh_start()
     st.rerun()
 
 with st.expander("About this model"):
