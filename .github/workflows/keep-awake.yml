@@ -1,0 +1,36 @@
+# Opens the deployed app in a real browser a few times a day so Streamlit Community Cloud does not put it to sleep (it sleeps after about 12 hours
+# without a visit), and wakes it if it is asleep. Set the repository variable APP_URL (Settings > Secrets and variables > Actions > Variables).
+name: keep-awake
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  visit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Open the app, wake it if needed, let the model load
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+        run: |
+          if [ -z "$APP_URL" ]; then echo "Set the repository variable APP_URL to the app's address"; exit 1; fi
+          python3 -m pip install --quiet playwright
+          python3 -m playwright install --with-deps chromium >/dev/null
+          python3 - <<'PY'
+          import os
+          from playwright.sync_api import sync_playwright
+          url = os.environ["APP_URL"]
+          with sync_playwright() as p:
+              page = p.chromium.launch().new_page()
+              page.goto(url, wait_until="domcontentloaded", timeout=90_000)
+              page.wait_for_timeout(5_000)
+              wake = page.get_by_role("button", name="Yes, get this app back up!")
+              if wake.count():
+                  print("app was asleep: waking it")
+                  wake.click()
+              page.wait_for_selector("text=GastroLens", timeout=240_000)  # the title only appears once the app is running
+              page.wait_for_timeout(90_000)  # a visit that stays open lets the background model load finish
+              print("app is up")
+          PY
