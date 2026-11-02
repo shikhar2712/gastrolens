@@ -19,6 +19,7 @@ from kvqa.predict import Predictor
 from webapp import confidence, questions
 from webapp.gradcam import explain
 
+DEFAULT_WEIGHTS_REPO = "shikharr27/gastrolens-weights"  # not secret; the repo is private, so downloading it needs HF_TOKEN
 RELEASE_SHA256 = "e9401ab00739257f35918514d09ad37559da695b8f16cd2ec6b1c343299be345"  # experiments/kvasir_vqa_x1_final/checkpoints/best.pt
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_PIXELS = 40_000_000
@@ -44,11 +45,13 @@ def weights_dir():
     local = os.environ.get("GASTROLENS_WEIGHTS_DIR")
     if local:
         return local
-    repo = os.environ.get("GASTROLENS_WEIGHTS_REPO")
-    if not repo:
-        raise RuntimeError("Set GASTROLENS_WEIGHTS_REPO to the Hugging Face model repo that holds the weights (see DEPLOY.md).")
+    repo = os.environ.get("GASTROLENS_WEIGHTS_REPO") or DEFAULT_WEIGHTS_REPO
     from huggingface_hub import snapshot_download
-    return snapshot_download(repo_id=repo, token=os.environ.get("HF_TOKEN") or None)
+    try:
+        return snapshot_download(repo_id=repo, token=os.environ.get("HF_TOKEN") or None)
+    except Exception as e:  # the cause is usually a missing or wrong token on a private repo; say so without printing anything secret
+        hint = "no HF_TOKEN is set" if not os.environ.get("HF_TOKEN") else "the HF_TOKEN may be wrong or may not have read access to it"
+        raise RuntimeError(f"Could not download the weights from the Hugging Face repo {repo!r}: {hint} ({type(e).__name__}).") from None
 
 
 def _sha256(path):

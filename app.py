@@ -13,6 +13,13 @@ from webapp.report import display_value
 
 st.set_page_config(page_title="GastroLens", layout="wide")
 
+for _name in ("HF_TOKEN", "GASTROLENS_WEIGHTS_REPO"):  # Streamlit Cloud keeps these under Secrets; the model code reads environment variables
+    try:
+        if _name in st.secrets and not os.environ.get(_name):
+            os.environ[_name] = str(st.secrets[_name])
+    except Exception:
+        pass  # no secrets configured: running locally with plain environment variables
+
 st.markdown(
     """
 <style>
